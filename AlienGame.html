@@ -81,16 +81,17 @@
             font-weight: bold;
         }
         #mobile-controls {
-            display: none;
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            gap: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+            margin-top: 15px;
+            width: 100%;
             z-index: 20;
         }
         .mobile-btn {
-            width: 65px;
-            height: 65px;
+            width: 75px;
+            height: 75px;
             border-radius: 50%;
             background: rgba(0, 200, 0, 0.3);
             border: 2px solid #0f0;
@@ -99,7 +100,7 @@
             justify-content: center;
             align-items: center;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 16px;
             user-select: none;
             touch-action: none;
         }
@@ -114,10 +115,13 @@
         .mobile-btn.bomb-btn:active {
             background: rgba(255, 0, 0, 0.6);
         }
-        @media (max-width: 850px) {
-            #mobile-controls {
-                display: flex;
-            }
+        .mobile-btn.reset-btn {
+            background: rgba(0, 150, 255, 0.3);
+            border-color: #0cf;
+            color: #0cf;
+        }
+        .mobile-btn.reset-btn:active {
+            background: rgba(0, 200, 255, 0.6);
         }
     </style>
 </head>
@@ -125,10 +129,6 @@
 
     <div id="game-container">
         <canvas id="gameCanvas" width="800" height="500"></canvas>
-        <div id="mobile-controls">
-            <div id="btn-bomb" class="mobile-btn bomb-btn">BOMB</div>
-            <div id="btn-shoot" class="mobile-btn">FIRE</div>
-        </div>
         <div id="ui">
             <div>SCORE: <span id="score">0</span></div>
             <div class="ui-center">BOMBS: <span id="bombs">3</span></div>
@@ -139,6 +139,12 @@
             <div>YOU WERE ASSIMILATED</div>
             <div style="font-size: 18px; color: #fff; margin-top: 20px;">Press <span class="key">R</span> to Restart</div>
         </div>
+    </div>
+
+    <div id="mobile-controls">
+        <div id="btn-reset" class="mobile-btn reset-btn">RESET</div>
+        <div id="btn-bomb" class="mobile-btn bomb-btn">BOMB</div>
+        <div id="btn-shoot" class="mobile-btn">FIRE</div>
     </div>
 
     <div id="instructions">
@@ -292,12 +298,26 @@ window.addEventListener('keyup', e => {
 // Virtual Buttons
 const btnShoot = document.getElementById('btn-shoot');
 const btnBomb = document.getElementById('btn-bomb');
+const btnReset = document.getElementById('btn-reset');
 
-btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); isTouchShooting = true; Sound.init(); });
-btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); isTouchShooting = false; });
-btnShoot.addEventListener('touchcancel', (e) => { e.preventDefault(); isTouchShooting = false; });
+function startShoot(e) { e.preventDefault(); isTouchShooting = true; Sound.init(); }
+function endShoot(e) { e.preventDefault(); isTouchShooting = false; }
+function fireBomb(e) { e.preventDefault(); Sound.init(); if (!isGameOver) deployBomb(); }
+function clickReset(e) { e.preventDefault(); Sound.init(); resetGame(); }
 
-btnBomb.addEventListener('touchstart', (e) => { e.preventDefault(); Sound.init(); if (!isGameOver) deployBomb(); });
+btnShoot.addEventListener('touchstart', startShoot);
+btnShoot.addEventListener('mousedown', startShoot);
+
+btnShoot.addEventListener('touchend', endShoot);
+btnShoot.addEventListener('mouseup', endShoot);
+btnShoot.addEventListener('mouseleave', endShoot);
+btnShoot.addEventListener('touchcancel', endShoot);
+
+btnBomb.addEventListener('touchstart', fireBomb);
+btnBomb.addEventListener('mousedown', fireBomb);
+
+btnReset.addEventListener('touchstart', clickReset);
+btnReset.addEventListener('mousedown', clickReset);
 
 // Touch Handling for Movement
 let movementTouchId = null;
