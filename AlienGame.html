@@ -21,11 +21,13 @@
         }
         #game-container {
             position: relative;
-            width: 800px;
-            height: 500px;
+            width: 100vw;
+            max-width: 800px;
+            aspect-ratio: 8 / 5;
             border: 4px solid #131;
             box-shadow: 0 0 30px #0a0;
             background-color: #020502;
+            touch-action: none;
         }
         canvas {
             display: block;
@@ -78,12 +80,55 @@
             border-radius: 4px;
             font-weight: bold;
         }
+        #mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            gap: 15px;
+            z-index: 20;
+        }
+        .mobile-btn {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            background: rgba(0, 200, 0, 0.3);
+            border: 2px solid #0f0;
+            color: #0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            user-select: none;
+            touch-action: none;
+        }
+        .mobile-btn:active {
+            background: rgba(0, 255, 0, 0.6);
+        }
+        .mobile-btn.bomb-btn {
+            background: rgba(200, 0, 0, 0.3);
+            border-color: #f00;
+            color: #f00;
+        }
+        .mobile-btn.bomb-btn:active {
+            background: rgba(255, 0, 0, 0.6);
+        }
+        @media (max-width: 850px) {
+            #mobile-controls {
+                display: flex;
+            }
+        }
     </style>
 </head>
 <body>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div id="mobile-controls">
+            <div id="btn-bomb" class="mobile-btn bomb-btn">BOMB</div>
+            <div id="btn-shoot" class="mobile-btn">FIRE</div>
+        </div>
         <div id="ui">
             <div>SCORE: <span id="score">0</span></div>
             <div class="ui-center">BOMBS: <span id="bombs">3</span></div>
@@ -102,8 +147,8 @@
         Bomb: <span class="key">X</span> &nbsp;|&nbsp; 
         Auto: <span class="key">T</span><br>
         <span style="margin-top: 5px; display: inline-block;"><b>[Mobile]</b> Move: <span>Swipe</span> &nbsp;|&nbsp; 
-        Shoot: <span>Tap</span> &nbsp;|&nbsp; 
-        Bomb: <span>Hold</span></span>
+        Shoot: <span>FIRE Btn</span> &nbsp;|&nbsp; 
+        Bomb: <span>BOMB Btn</span></span>
     </div>
 
 <script>
@@ -220,6 +265,8 @@ let alienSpeed = 4;
 let muzzleFlash = 0;
 let screenFlash = 0;
 let lastWarningTime = 0;
+let fireCooldown = 0;
+let isTouchShooting = false;
 
 // Player (Marine) State
 const player = { x: 0, z: 50, speed: 6 };
@@ -230,7 +277,7 @@ window.addEventListener('keydown', e => {
     Sound.init(); 
     keys[e.key.toLowerCase()] = true;
     
-    if (e.key.toLowerCase() === 'c' && !isGameOver) shoot();
+    if (e.key.toLowerCase() === 'c' && !isGameOver && fireCooldown <= 0) { shoot(); fireCooldown = 12; }
     if (e.key.toLowerCase() === 'x' && !isGameOver) deployBomb();
     if (e.key.toLowerCase() === 'r' && isGameOver) resetGame();
     if (e.key.toLowerCase() === 't') {
@@ -242,61 +289,61 @@ window.addEventListener('keyup', e => {
     keys[e.key.toLowerCase()] = false;
 });
 
-// Touch Handling for Mobile
+// Virtual Buttons
+const btnShoot = document.getElementById('btn-shoot');
+const btnBomb = document.getElementById('btn-bomb');
+
+btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); isTouchShooting = true; Sound.init(); });
+btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); isTouchShooting = false; });
+btnShoot.addEventListener('touchcancel', (e) => { e.preventDefault(); isTouchShooting = false; });
+
+btnBomb.addEventListener('touchstart', (e) => { e.preventDefault(); Sound.init(); if (!isGameOver) deployBomb(); });
+
+// Touch Handling for Movement
+let movementTouchId = null;
 let touchStartX = 0;
-let touchStartTime = 0;
-let longPressTimer = null;
-let isLongPress = false;
-let hasMoved = false;
+let lastPlayerX = 0;
 
-window.addEventListener('touchstart', e => {
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
     Sound.init();
-    if (isGameOver) {
-        resetGame();
-        return;
-    }
-    const touch = e.touches[0];
-    touchStartX = touch.clientX;
-    touchStartTime = Date.now();
-    isLongPress = false;
-    hasMoved = false;
+    if (isGameOver) { resetGame(); return; }
     
-    longPressTimer = setTimeout(() => {
-        isLongPress = true;
-        if (!isGameOver && !hasMoved) deployBomb();
-    }, 500); // 500ms for long press
-}, {passive: false});
-
-window.addEventListener('touchmove', e => {
-    if (isGameOver) return;
-    const touch = e.touches[0];
-    let deltaX = touch.clientX - touchStartX;
-    
-    // If finger moves significantly, cancel long press
-    if (Math.abs(deltaX) > 5) {
-        hasMoved = true;
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        let t = e.changedTouches[i];
+        if (movementTouchId === null) {
+            movementTouchId = t.identifier;
+            touchStartX = t.clientX;
+            lastPlayerX = player.x;
         }
     }
-    
-    player.x += deltaX * 1.5; // Sensitivity multiplier
-    player.x = Math.max(LEFT_WALL + 50, Math.min(RIGHT_WALL - 50, player.x));
-    touchStartX = touch.clientX; // Update for continuous movement
-    e.preventDefault(); // Prevent scrolling while playing
 }, {passive: false});
 
-window.addEventListener('touchend', e => {
-    if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (isGameOver) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        let t = e.changedTouches[i];
+        if (t.identifier === movementTouchId) {
+            let deltaX = t.clientX - touchStartX;
+            player.x = lastPlayerX + deltaX * 1.5;
+            player.x = Math.max(LEFT_WALL + 50, Math.min(RIGHT_WALL - 50, player.x));
+        }
     }
-    
-    let touchDuration = Date.now() - touchStartTime;
-    // If it was a short tap and we didn't trigger long press and didn't move much
-    if (!isLongPress && !hasMoved && touchDuration < 300 && !isGameOver) {
-        shoot();
+}, {passive: false});
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        let t = e.changedTouches[i];
+        if (t.identifier === movementTouchId) {
+            movementTouchId = null;
+        }
+    }
+}, {passive: false});
+canvas.addEventListener('touchcancel', e => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === movementTouchId) movementTouchId = null;
     }
 });
 
@@ -395,6 +442,12 @@ function resetGame() {
 
 function update() {
     if (isGameOver) return;
+
+    if (fireCooldown > 0) fireCooldown--;
+    if (isTouchShooting && fireCooldown <= 0) {
+        shoot();
+        fireCooldown = 12;
+    }
 
     if (keys['a'] || keys['arrowleft']) player.x -= player.speed;
     if (keys['d'] || keys['arrowright']) player.x += player.speed;
