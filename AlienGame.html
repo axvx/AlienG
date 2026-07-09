@@ -88,6 +88,7 @@
             <div>SCORE: <span id="score">0</span></div>
             <div class="ui-center">BOMBS: <span id="bombs">3</span></div>
             <div>RADAR: <span id="radar">CLEAR</span></div>
+            <div style="color: #0ff;">AGENT: <span id="agent-status">OFF</span></div>
         </div>
         <div id="game-over">
             <div>YOU WERE ASSIMILATED</div>
@@ -96,11 +97,13 @@
     </div>
 
     <div id="instructions">
-        Move Marine: <span class="key">A</span> / <span class="key">D</span> or <span class="key">←</span> / <span class="key">→</span> 
-        &nbsp;&nbsp;|&nbsp;&nbsp; 
-        Shoot: <span class="key">C</span>
-        &nbsp;&nbsp;|&nbsp;&nbsp; 
-        Smart Bomb: <span class="key">X</span>
+        <b>[PC]</b> Move: <span class="key">A</span>/<span class="key">D</span> &nbsp;|&nbsp; 
+        Shoot: <span class="key">C</span> &nbsp;|&nbsp; 
+        Bomb: <span class="key">X</span> &nbsp;|&nbsp; 
+        Auto: <span class="key">T</span><br>
+        <span style="margin-top: 5px; display: inline-block;"><b>[Mobile]</b> Move: <span>Swipe</span> &nbsp;|&nbsp; 
+        Shoot: <span>Tap</span> &nbsp;|&nbsp; 
+        Bomb: <span>Hold</span></span>
     </div>
 
 <script>
@@ -110,6 +113,7 @@ const scoreEl = document.getElementById('score');
 const radarEl = document.getElementById('radar');
 const bombsEl = document.getElementById('bombs');
 const gameOverScreen = document.getElementById('game-over');
+const agentStatusEl = document.getElementById('agent-status');
 
 // ---------------- SOUND ENGINE ---------------- //
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -229,9 +233,71 @@ window.addEventListener('keydown', e => {
     if (e.key.toLowerCase() === 'c' && !isGameOver) shoot();
     if (e.key.toLowerCase() === 'x' && !isGameOver) deployBomb();
     if (e.key.toLowerCase() === 'r' && isGameOver) resetGame();
+    if (e.key.toLowerCase() === 't') {
+        agentEnabled = !agentEnabled;
+        agentStatusEl.innerText = agentEnabled ? "ON" : "OFF";
+    }
 });
 window.addEventListener('keyup', e => {
     keys[e.key.toLowerCase()] = false;
+});
+
+// Touch Handling for Mobile
+let touchStartX = 0;
+let touchStartTime = 0;
+let longPressTimer = null;
+let isLongPress = false;
+let hasMoved = false;
+
+window.addEventListener('touchstart', e => {
+    Sound.init();
+    if (isGameOver) {
+        resetGame();
+        return;
+    }
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartTime = Date.now();
+    isLongPress = false;
+    hasMoved = false;
+    
+    longPressTimer = setTimeout(() => {
+        isLongPress = true;
+        if (!isGameOver && !hasMoved) deployBomb();
+    }, 500); // 500ms for long press
+}, {passive: false});
+
+window.addEventListener('touchmove', e => {
+    if (isGameOver) return;
+    const touch = e.touches[0];
+    let deltaX = touch.clientX - touchStartX;
+    
+    // If finger moves significantly, cancel long press
+    if (Math.abs(deltaX) > 5) {
+        hasMoved = true;
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    }
+    
+    player.x += deltaX * 1.5; // Sensitivity multiplier
+    player.x = Math.max(LEFT_WALL + 50, Math.min(RIGHT_WALL - 50, player.x));
+    touchStartX = touch.clientX; // Update for continuous movement
+    e.preventDefault(); // Prevent scrolling while playing
+}, {passive: false});
+
+window.addEventListener('touchend', e => {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+    }
+    
+    let touchDuration = Date.now() - touchStartTime;
+    // If it was a short tap and we didn't trigger long press and didn't move much
+    if (!isLongPress && !hasMoved && touchDuration < 300 && !isGameOver) {
+        shoot();
+    }
 });
 
 function project(x, y, z, camX) {
@@ -517,7 +583,52 @@ function render() {
     drawHUD();
 }
 
+let agentEnabled = false;
+
+function agentUpdate() {
+    if (!agentEnabled) return;
+    
+    if (isGameOver) {
+        if (Math.random() < 0.02) resetGame(); // Small delay before auto-restart
+        return;
+    }
+
+    let closestAlien = null;
+    let minZ = 9999;
+
+    for (let alien of aliens) {
+        if (alien.alive && alien.z < minZ) {
+            minZ = alien.z;
+            closestAlien = alien;
+        }
+    }
+
+    keys['a'] = false;
+    keys['d'] = false;
+    keys['arrowleft'] = false;
+    keys['arrowright'] = false;
+
+    if (closestAlien) {
+        let diffX = closestAlien.x - player.x;
+        
+        if (diffX > 10) {
+            keys['d'] = true;
+        } else if (diffX < -10) {
+            keys['a'] = true;
+        }
+
+        if (Math.abs(diffX) < 50 && closestAlien.z < 2500) {
+            if (Math.random() < 0.2) shoot();
+        }
+        
+        if (closestAlien.z < 200 && Math.abs(diffX) >= 50 && bombs > 0) {
+            deployBomb();
+        }
+    }
+}
+
 function loop() {
+    agentUpdate();
     update();
     render();
     requestAnimationFrame(loop);
