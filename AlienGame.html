@@ -168,10 +168,14 @@ const agentStatusEl = document.getElementById('agent-status');
 
 // ---------------- SOUND ENGINE ---------------- //
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const bgMusic = new Audio('gamesound.mp3');
+bgMusic.loop = true;
+bgMusic.volume = 0.6; // Slightly above medium volume
 
 const Sound = {
     init() {
         if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (bgMusic.paused) bgMusic.play().catch(e => console.log(e));
     },
     shoot() {
         if (audioCtx.state === 'suspended') return;
