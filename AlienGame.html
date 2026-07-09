@@ -210,6 +210,7 @@ let isGameOver = false;
 let score = 0;
 let bombs = 3;
 let aliens = [];
+let particles = [];
 let spawnTimer = 0;
 let alienSpeed = 4;
 let muzzleFlash = 0;
@@ -242,6 +243,22 @@ function project(x, y, z, camX) {
     };
 }
 
+function createBloodExplosion(x, z) {
+    for (let i = 0; i < 40; i++) {
+        particles.push({
+            x: x + (Math.random() - 0.5) * 40,
+            y: FLOOR_Y - 80 + (Math.random() - 0.5) * 40,
+            z: z + (Math.random() - 0.5) * 40,
+            vx: (Math.random() - 0.5) * 20,
+            vy: (Math.random() - 1.2) * 15,
+            vz: (Math.random() - 0.5) * 20,
+            life: Math.random() * 20 + 20,
+            maxLife: 40,
+            size: Math.random() * 20 + 5
+        });
+    }
+}
+
 function spawnAlien() {
     const laneX = LANES[Math.floor(Math.random() * LANES.length)];
     aliens.push({ x: laneX, z: 2500, alive: true });
@@ -266,6 +283,7 @@ function shoot() {
 
     if (closestTarget) {
         closestTarget.alive = false;
+        createBloodExplosion(closestTarget.x, closestTarget.z);
         Sound.kill(); 
         score += 100;
         scoreEl.innerText = score;
@@ -284,6 +302,7 @@ function deployBomb() {
         aliens.forEach(alien => {
             if (alien.alive) {
                 alien.alive = false;
+                createBloodExplosion(alien.x, alien.z);
                 kills++;
             }
         });
@@ -300,6 +319,7 @@ function resetGame() {
     score = 0;
     bombs = 3;
     aliens = [];
+    particles = [];
     player.x = 0;
     alienSpeed = 4;
     scoreEl.innerText = score;
@@ -357,6 +377,16 @@ function update() {
 
     if (muzzleFlash > 0) muzzleFlash--;
     if (screenFlash > 0) screenFlash--;
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.z += p.vz;
+        p.vy += 1.2; // Gravity
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
 }
 
 // ---------------- RENDER ENGINE ---------------- //
@@ -466,12 +496,24 @@ function drawHUD() {
     }
 }
 
+function drawParticles() {
+    particles.forEach(p => {
+        let proj = project(p.x, p.y, p.z, player.x);
+        if (proj.scale > 0 && proj.scale < 20) {
+            ctx.fillStyle = `rgba(220, 0, 0, ${p.life / p.maxLife})`;
+            let size = p.size * proj.scale;
+            ctx.fillRect(proj.x - size/2, proj.y - size/2, size, size);
+        }
+    });
+}
+
 function render() {
     ctx.fillStyle = '#020502';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     drawGrid();
     drawAliens();
+    drawParticles();
     drawHUD();
 }
 
